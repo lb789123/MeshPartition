@@ -82,6 +82,7 @@ public:
 	void runClusterBorderEdgeSimp(double ratio);
 	bool writeSimplifiedPLY(const string filename);
 	void saveSimplifiedClusterFile(const string filename);
+	bool clustersHaveCompatibleOrientation(int c1, int c2);
 
 
 private:
@@ -177,6 +178,7 @@ public:
 	const int kMinEdgeNum = 5;
 	EdgeSimpType edge_simp_type_;
 	bool flag_preserve_topology_;
+	double merge_angle_threshold_deg_;
 	// std::chrono::high_resolution_clock::time_point start_time_; // timer
 };
 

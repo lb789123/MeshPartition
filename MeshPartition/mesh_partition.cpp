@@ -11,6 +11,7 @@ MeshPartition::MeshPartition()
 	vertex_num_ = face_num_ = 0;
 	simp_ratio_ = 1.0;
 	flag_preserve_topology_ = false;
+	merge_angle_threshold_deg_ = 40.0;
 }
 
 MeshPartition::~MeshPartition()
@@ -626,6 +627,15 @@ int MeshPartition::findClusterNeighbors(int cidx, unordered_set<int>& cluster_el
 
 void MeshPartition::computeEdgeEnergy(Edge* edge)
 {
+	// Check if clusters have compatible orientation
+	if (!clustersHaveCompatibleOrientation(edge->v1, edge->v2)) {
+		// Incompatible orientation - set very large positive energy
+		// so the heap key becomes very negative and won't be selected
+		double energy = 1e100;
+		edge->heap_key(-energy);
+		return;
+	}
+	
 	CovObj cov1 = clusters_[edge->v1].cov;
 	cov1 += clusters_[edge->v2].cov;
 	double energy = cov1.energy() - clusters_[edge->v1].cov.energy() - clusters_[edge->v2].cov.energy();
@@ -732,6 +742,34 @@ void MeshPartition::mergeClusters(int c1, int c2)
 		faces_[fidx].cluster_id = c1;
 	}
 	clusters_[c2].elements.clear();
+}
+
+bool MeshPartition::clustersHaveCompatibleOrientation(int c1, int c2)
+{
+	// Compute plane normals for both clusters
+	clusters_[c1].cov.computePlaneNormal();
+	clusters_[c2].cov.computePlaneNormal();
+	
+	Vector3d n1 = clusters_[c1].cov.normal_;
+	Vector3d n2 = clusters_[c2].cov.normal_;
+	
+	// Check for degenerate (near-zero) normals
+	double norm1 = n1.norm();
+	double norm2 = n2.norm();
+	if (norm1 < 1e-15 || norm2 < 1e-15) {
+		// Cannot determine orientation, allow merge
+		return true;
+	}
+	
+	// Compute angle between normals
+	double cosang = n1.dot(n2) / (norm1 * norm2);
+	// Clamp to [-1, 1] to avoid numerical issues with acos
+	cosang = std::max(-1.0, std::min(1.0, cosang));
+	
+	// Convert to degrees
+	double angle_deg = acos(cosang) * 180.0 / M_PI;
+	
+	return angle_deg <= merge_angle_threshold_deg_;
 }
 
 void MeshPartition::createClusterColors()
